@@ -167,3 +167,69 @@ export function friendlyError(e: unknown): string {
   if (raw.includes("UNIQUE")) return "That value is already in use.";
   return raw.replace(/^Error:\s*/, "");
 }
+
+// ---- Phase 12: devices / hardware ----
+export interface DeviceInfo {
+  kind: string; label: string; mode: string; status: string; configurable: boolean;
+}
+export interface DeviceResult { ok: boolean; mode: string; message: string; }
+
+export const listDevices = () => invoke<DeviceInfo[]>("list_devices");
+export const reprintReceipt = (txnId: number) => invoke<DeviceResult>("reprint_receipt", { txnId });
+export const printTestReceipt = () => invoke<DeviceResult>("print_test_receipt");
+export const manualOpenDrawer = (reason: string, managerApprovedBy: number | null) =>
+  invoke<DeviceResult>("manual_open_drawer", { reason, managerApprovedBy });
+export const autoOpenDrawer = (event: string, tenderKind: string | null) =>
+  invoke<DeviceResult>("auto_open_drawer", { event, tenderKind });
+
+// ---- Phase 13: purchasing / inventory pro ----
+export interface Vendor {
+  id: number; name: string; contact: string | null; phone: string | null;
+  email: string | null; account_no: string | null; notes: string | null; active: boolean;
+}
+export interface PoRow {
+  id: number; vendor: string; reference: string | null; status: string;
+  created_at: string; line_count: number; total_cost: number;
+}
+export interface ReorderRow {
+  product_id: number; name: string; on_hand: number; reorder_level: number;
+  min_stock: number; pack_size: number; suggested_cases: number; vendor: string | null;
+}
+
+export const listVendors = () => invoke<Vendor[]>("list_vendors");
+export const upsertVendor = (input: Partial<Vendor> & { name: string }) => invoke<number>("upsert_vendor", { input });
+export const setVendorActive = (id: number, active: boolean) => invoke<void>("set_vendor_active", { id, active });
+export const listPurchaseOrders = () => invoke<PoRow[]>("list_purchase_orders");
+export const createPurchaseOrder = (
+  vendorId: number, reference: string | null, notes: string | null,
+  lines: { product_id: number; vendor_sku: string | null; qty_ordered: number; unit_cost: number; pack_size: number }[]
+) => invoke<number>("create_purchase_order", { vendorId, reference, notes, lines });
+export const setPoStatus = (poId: number, status: string) => invoke<void>("set_po_status", { poId, status });
+export const receivePurchaseOrder = (poId: number, receipts: { line_id: number; cases_received: number }[]) =>
+  invoke<string>("receive_purchase_order", { poId, receipts });
+export const adjustInventory = (productId: number, delta: number, reasonCode: string) =>
+  invoke<void>("adjust_inventory", { productId, delta, reasonCode });
+export const reorderSuggestions = () => invoke<ReorderRow[]>("reorder_suggestions");
+
+// ---- Phase 14: profit + loss prevention ----
+import type { ProfitReport, LossPreventionRow } from "./types";
+export const getProfitReport = (period: "today" | "week" | "month" | "all") =>
+  invoke<ProfitReport>("get_profit_report", { period });
+export const getLossPrevention = (period: "today" | "week" | "month" | "all") =>
+  invoke<LossPreventionRow[]>("get_loss_prevention", { period });
+
+/** Client-side CSV export of any row set. */
+export function exportCsv(filename: string, rows: Record<string, unknown>[]) {
+  if (rows.length === 0) return;
+  const headers = Object.keys(rows[0]);
+  const escape = (v: unknown) => {
+    const s = String(v ?? "");
+    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const csv = [headers.join(","), ...rows.map((r) => headers.map((h) => escape(r[h])).join(","))].join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}

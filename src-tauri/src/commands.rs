@@ -101,8 +101,11 @@ pub async fn create_sale(
     let store_name = crate::settings::get_setting_str(&state.pool, "store_name", "Speedway Market").await;
     let footer = crate::settings::get_setting_str(&state.pool, "receipt_footer", "Thank you — see you soon!").await;
 
-    let shift_id: i64 = sqlx::query_scalar(
-        "SELECT id FROM shifts WHERE cashier_id = ?1 AND status = 'open' ORDER BY id DESC LIMIT 1",
+    // Resolve the open shift and its register. register_id is stamped onto the
+    // sale from the shift (single-register today; groundwork for Phase 17's
+    // full multi-register model).
+    let (shift_id, register_id): (i64, i64) = sqlx::query_as(
+        "SELECT id, register_id FROM shifts WHERE cashier_id = ?1 AND status = 'open' ORDER BY id DESC LIMIT 1",
     )
     .bind(cashier_id)
     .fetch_optional(&state.pool)
@@ -117,8 +120,8 @@ pub async fn create_sale(
     let mut bonus_pts = 0i64;
     let mut manual_lines = 0i64;
     let mut needs_age = false;
-    // (product_id, name, qty, unit_price, line_total)
-    let mut prepared: Vec<(i64, String, i64, i64, i64)> = Vec::new();
+    // (product_id, name, qty, unit_price, unit_cost, line_total, line_tax)
+    let mut prepared: Vec<(i64, String, i64, i64, i64, i64, i64)> = Vec::new();
 
     for line in &payload.items {
         if line.qty <= 0 {
@@ -153,10 +156,15 @@ pub async fn create_sale(
         };
         let line_total = crate::pricing::promo_line_total(unit_price, line.qty, &p.promo_type, p.promo_value);
         let line_tax = crate::pricing::line_tax(line_total, p.tax_rate);
+        // Historical cost captured from the authoritative product record at
+        // sale time — the frontend never supplies this. Future edits to
+        // products.cost must not change this row. (Rule is unit-tested as
+        // pricing::historical_unit_cost.)
+        let unit_cost = crate::pricing::historical_unit_cost(p.cost, None);
         bonus_pts += p.bonus_points * line.qty;
         subtotal += line_total;
         tax += line_tax;
-        prepared.push((p.id, p.name, line.qty, unit_price, line_total));
+        prepared.push((p.id, p.name, line.qty, unit_price, unit_cost, line_total, line_tax));
     }
 
     if needs_age && !payload.age_verified {
@@ -196,11 +204,12 @@ pub async fn create_sale(
 
     let res = sqlx::query(
         "INSERT INTO transactions \
-         (cashier_id, shift_id, type, status, subtotal, tax, total, customer_id, discount, points_delta) \
-         VALUES (?1, ?2, 'sale', 'completed', ?3, ?4, ?5, ?6, ?7, ?8)",
+         (cashier_id, shift_id, register_id, type, status, subtotal, tax, total, customer_id, discount, points_delta) \
+         VALUES (?1, ?2, ?3, 'sale', 'completed', ?4, ?5, ?6, ?7, ?8, ?9)",
     )
     .bind(cashier_id)
     .bind(shift_id)
+    .bind(register_id)
     .bind(subtotal)
     .bind(tax)
     .bind(total)
@@ -213,17 +222,19 @@ pub async fn create_sale(
     let tx_id = res.last_insert_rowid();
 
     let mut receipt_items = Vec::new();
-    for (pid, name, qty, unit_price, line_total) in prepared {
+    for (pid, name, qty, unit_price, unit_cost, line_total, line_tax) in prepared {
         sqlx::query(
             "INSERT INTO transaction_items \
-             (transaction_id, product_id, qty, unit_price, line_total) \
-             VALUES (?1, ?2, ?3, ?4, ?5)",
+             (transaction_id, product_id, qty, unit_price, unit_cost, line_total, tax_amount) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
         )
         .bind(tx_id)
         .bind(pid)
         .bind(qty)
         .bind(unit_price)
+        .bind(unit_cost)
         .bind(line_total)
+        .bind(line_tax)
         .execute(&mut *tx)
         .await
         .map_err(|e| e.to_string())?;

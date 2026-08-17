@@ -209,3 +209,16 @@ export interface AuditRow {
   detail: string | null;
   created_at: string;
 }
+
+
+export interface ProfitRow {
+  department: string; revenue: number; cost: number; profit: number; margin_pct: number; costed_pct: number;
+}
+export interface ProfitReport {
+  period: string; total_revenue: number; costed_revenue: number; total_cost: number;
+  gross_profit: number; margin_pct: number; by_department: ProfitRow[];
+}
+export interface LossPreventionRow {
+  cashier: string; void_count: number; void_amount: number; refund_count: number;
+  refund_amount: number; no_sale_count: number; over_short: number;
+}

@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { getReport, money } from "../api";
-import type { ReportData } from "../types";
+import { getReport, getProfitReport, getLossPrevention, exportCsv, money } from "../api";
+import type { ReportData, ProfitReport, LossPreventionRow } from "../types";
 
 type Period = "today" | "week" | "month" | "all";
+type ReportView = "sales" | "profit" | "loss";
 const PERIODS: { id: Period; label: string }[] = [
   { id: "today", label: "Today" },
   { id: "week", label: "Week" },
@@ -14,6 +15,7 @@ const PERIODS: { id: Period; label: string }[] = [
 const COLORS = ["#2fbf71", "#3aa0ff", "#f5a623", "#e5534b", "#a06cff", "#20c9b0", "#f06fb0", "#8a98a8"];
 
 export default function Reports() {
+  const [view, setView] = useState<ReportView>("sales");
   const [period, setPeriod] = useState<Period>("today");
   const [data, setData] = useState<ReportData | null>(null);
 
@@ -29,8 +31,15 @@ export default function Reports() {
           ))}
         </div>
       </div>
+      <div className="tender-tabs" style={{ marginBottom: 16 }}>
+        <button className={view === "sales" ? "on" : ""} onClick={() => setView("sales")}>Sales</button>
+        <button className={view === "profit" ? "on" : ""} onClick={() => setView("profit")}>Profit &amp; Margin</button>
+        <button className={view === "loss" ? "on" : ""} onClick={() => setView("loss")}>Loss Prevention</button>
+      </div>
 
-      {!data ? <div className="empty">Loading…</div> : data.txn_count === 0 ? (
+      {view === "profit" && <ProfitView period={period} />}
+      {view === "loss" && <LossView period={period} />}
+      {view === "sales" && (!data ? <div className="empty">Loading…</div> : data.txn_count === 0 ? (
         <div className="empty" style={{ marginTop: 40 }}>No sales in this period yet.</div>
       ) : (
         <>
@@ -54,8 +63,73 @@ export default function Reports() {
             </Panel>
           </div>
         </>
-      )}
+      ))}
     </div>
+  );
+}
+
+function ProfitView({ period }: { period: Period }) {
+  const [rep, setRep] = useState<ProfitReport | null>(null);
+  useEffect(() => { getProfitReport(period).then(setRep).catch(console.error); }, [period]);
+  if (!rep) return <div className="empty">Loading…</div>;
+  if (rep.total_revenue === 0) return <div className="empty" style={{ marginTop: 40 }}>No sales in this period yet.</div>;
+  const uncosted = rep.total_revenue - rep.costed_revenue;
+  return (
+    <>
+      <div className="kpis">
+        <Kpi label="Revenue" value={money(rep.total_revenue)} />
+        <Kpi label="Cost (known)" value={money(rep.total_cost)} />
+        <Kpi label="Gross profit" value={money(rep.gross_profit)} />
+        <Kpi label="Margin" value={`${rep.margin_pct.toFixed(1)}%`} />
+      </div>
+      {uncosted > 0 && (
+        <p className="hint">{money(uncosted)} of revenue came from items with no recorded historical cost (sold before cost tracking began) and is excluded from profit — never estimated.</p>
+      )}
+      <div className="page-head"><span /><button className="btn slim" onClick={() => exportCsv(`profit-${period}.csv`, rep.by_department as unknown as Record<string, unknown>[])}>Export CSV</button></div>
+      <table className="table">
+        <thead><tr><th>Department</th><th className="num">Revenue</th><th className="num">Cost</th><th className="num">Profit</th><th className="num">Margin</th><th className="num">% costed</th></tr></thead>
+        <tbody>
+          {rep.by_department.map((r) => (
+            <tr key={r.department}>
+              <td>{r.department}</td>
+              <td className="num mono">{money(r.revenue)}</td>
+              <td className="num mono">{money(r.cost)}</td>
+              <td className="num mono">{money(r.profit)}</td>
+              <td className="num mono">{r.margin_pct.toFixed(1)}%</td>
+              <td className="num mono">{r.costed_pct.toFixed(0)}%</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function LossView({ period }: { period: Period }) {
+  const [rows, setRows] = useState<LossPreventionRow[] | null>(null);
+  useEffect(() => { getLossPrevention(period).then(setRows).catch(console.error); }, [period]);
+  if (!rows) return <div className="empty">Loading…</div>;
+  return (
+    <>
+      <p className="hint">Shrink signals by cashier: voids, refunds, no-sales, and cumulative drawer over/short. High values aren't proof of wrongdoing — they're where to look.</p>
+      <div className="page-head"><span /><button className="btn slim" onClick={() => exportCsv(`loss-prevention-${period}.csv`, rows as unknown as Record<string, unknown>[])}>Export CSV</button></div>
+      <table className="table">
+        <thead><tr><th>Cashier</th><th className="num">Voids</th><th className="num">Void $</th><th className="num">Refunds</th><th className="num">Refund $</th><th className="num">No-sales</th><th className="num">Over/Short</th></tr></thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.cashier}>
+              <td>{r.cashier}</td>
+              <td className="num mono">{r.void_count}</td>
+              <td className="num mono">{money(r.void_amount)}</td>
+              <td className="num mono">{r.refund_count}</td>
+              <td className="num mono">{money(r.refund_amount)}</td>
+              <td className="num mono">{r.no_sale_count}</td>
+              <td className="num mono" style={{ color: r.over_short < 0 ? "var(--danger)" : undefined }}>{money(r.over_short)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
   );
 }
 

@@ -33,6 +33,9 @@ use crate::security::role_can;
 pub const KNOWN_KEYS: &[&str] = &[
     "store_name", "receipt_footer", "default_tax_pct",
     "loyalty_threshold", "loyalty_reward", "low_stock_default", "theme",
+    "dev_receipt_mode", "dev_drawer_mode", "dev_drawer_card", "dev_printer_forcefail",
+    "receipt_paper_width", "receipt_auto_print", "receipt_copies",
+    "store_address", "store_phone", "store_tax_id",
 ];
 
 /// Typed read with default — used by the Rust sale path so business rules

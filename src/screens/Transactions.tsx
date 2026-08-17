@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { listTransactions, voidTransaction, refundTransaction, money } from "../api";
+import { listTransactions, voidTransaction, refundTransaction, reprintReceipt, money } from "../api";
 import { useSession } from "../sessionStore";
 import { ManagerOverrideModal } from "../components/ShiftModals";
+import { notify } from "../components/Toast";
 import type { TxnRow } from "../types";
 
 type Pending = { action: "void" | "refund"; txn: TxnRow };
@@ -64,6 +65,10 @@ export default function Transactions() {
                 {t.kind === "sale" && t.status === "completed" && (
                   <button className="link" onClick={() => start({ action: "refund", txn: t })}>Refund</button>
                 )}
+                <button className="link" onClick={async () => {
+                  try { const r = await reprintReceipt(t.id); notify(r.ok ? "Receipt reprinted (simulated)" : r.message, r.ok ? "ok" : "err"); }
+                  catch (e) { notify(String(e), "err"); }
+                }}>Reprint</button>
               </td>
             </tr>
           ))}

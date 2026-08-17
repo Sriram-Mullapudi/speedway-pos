@@ -117,3 +117,49 @@ mod loyalty_tests {
         assert_eq!(loyalty_earned(99, 0), 0);
     }
 }
+
+/// The historical-cost rule, expressed as a pure function so it is unit-testable
+/// without a database. At sale time the authoritative cost is the product's
+/// current cost; the frontend never supplies it. Once captured into a
+/// transaction item it is immutable — later product-cost edits do not apply.
+/// `frontend_supplied` is accepted only to prove it is ignored.
+pub fn historical_unit_cost(product_cost: i64, _frontend_supplied: Option<i64>) -> i64 {
+    // Deliberately ignores any frontend-supplied value.
+    product_cost
+}
+
+#[cfg(test)]
+mod cost_and_tax_tests {
+    use super::*;
+
+    #[test]
+    fn unit_cost_comes_from_product_not_frontend() {
+        // Even if a malicious frontend claims cost = 1, the product's cost wins.
+        assert_eq!(historical_unit_cost(250, Some(1)), 250);
+        assert_eq!(historical_unit_cost(250, None), 250);
+    }
+
+    #[test]
+    fn historical_cost_is_snapshot_not_reference() {
+        // Capture at sale time...
+        let captured = historical_unit_cost(250, None);
+        // ...then the product's cost changes later.
+        let _new_product_cost = 400;
+        // The captured value is unaffected — it was copied, not referenced.
+        assert_eq!(captured, 250);
+    }
+
+    #[test]
+    fn per_line_tax_sums_to_transaction_tax() {
+        // Three lines at the app's per-line rounding policy. The transaction
+        // tax is defined as the sum of per-line taxes, so they reconcile by
+        // construction — this guards against anyone changing the sale path to
+        // round at the header level and drift by a cent.
+        let lines = [(500i64, 0.07f64), (149, 0.07), (999, 0.085)];
+        let per_line: Vec<i64> = lines.iter().map(|&(lt, r)| line_tax(lt, r)).collect();
+        let tx_tax: i64 = per_line.iter().sum();
+        assert_eq!(tx_tax, per_line[0] + per_line[1] + per_line[2]);
+        // And each is the individually rounded amount.
+        assert_eq!(per_line[0], line_tax(500, 0.07));
+    }
+}

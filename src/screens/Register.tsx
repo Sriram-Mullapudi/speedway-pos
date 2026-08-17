@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   searchProducts, createSale, getLayout, listCategories, listOpenItems, money, nextDollar,
+  autoOpenDrawer,
   searchCustomers, createCustomer, formatPhone, normalizePhone,
   promoLineTotal, promoLabel, friendlyError,
   suspendSale, listSuspended, resumeSale,
@@ -10,6 +11,8 @@ import { useCart } from "../store";
 import { useSession } from "../sessionStore";
 import { DrawerModal } from "../components/ShiftModals";
 import { notify } from "../components/Toast";
+import { useScanner } from "../useScanner";
+import { publishCustomerView } from "./CustomerDisplay";
 import type { Category, Customer, Product, Receipt, SuspendedSale, TouchLayout } from "../types";
 
 type DeptTab = { id: number | "all" | "custom"; label: string };
@@ -68,6 +71,21 @@ export default function Register({ onNav }: { onNav?: (view: string) => void }) 
     return base.filter((p) => p.category_id === dept);
   }, [results, allProducts, dept, query]);
 
+  // Push a customer-safe snapshot to the customer display (no cost/margin/audit).
+  useEffect(() => {
+    publishCustomerView({
+      phase: cart.lines.length ? "cart" : "idle",
+      store: "Speedway Market",
+      items: cart.lines.map((l) => ({
+        name: l.product.name, qty: l.qty,
+        unit: l.priceOverride ?? l.product.price,
+        line: (l.priceOverride ?? l.product.price) * l.qty,
+      })),
+      subtotal: cart.subtotal(), tax: cart.tax(), total: cart.total(),
+      customer: customer?.name ?? null, points: customer?.loyalty_points ?? null,
+    });
+  }, [cart.lines, customer, cart]);
+
   const padCents = pad ? parseInt(pad, 10) : 0;
 
   function tapDept(id: number | "all" | "custom") {
@@ -89,6 +107,18 @@ export default function Register({ onNav }: { onNav?: (view: string) => void }) 
     setStage(cart.hasAgeRestricted() ? "age" : "tender");
   }
 
+  // Barcode scanner (keyboard-wedge): look the code up against the authoritative
+  // catalog by SKU/barcode/name; unknown codes give a clear cashier response.
+  async function onScan(code: string) {
+    try {
+      const matches = await searchProducts(code);
+      const exact = matches.find((p) => p.sku === code) ?? matches[0];
+      if (exact) { cart.add(exact); notify(`Added ${exact.name}`); }
+      else notify(`Unknown barcode: ${code}`, "err");
+    } catch (e) { notify(String(e), "err"); }
+  }
+  useScanner(onScan);
+
   async function finalize(tender: { kind: "cash" | "card"; tendered: number }, redeem: boolean) {
     const input: CreateSaleInput = {
       items: cart.lines.map((l) => ({
@@ -106,6 +136,13 @@ export default function Register({ onNav }: { onNav?: (view: string) => void }) 
       const r = await createSale(input);
       setReceipt(r);
       setLastReceipt(r);
+      // Post-commit hardware action — never affects the committed sale.
+      autoOpenDrawer("sale", tender.kind).catch(() => {});
+      publishCustomerView({
+        phase: "paid", store: "Speedway Market", items: [],
+        subtotal: r.subtotal, tax: r.tax, total: r.total,
+        tendered: r.tendered, change: r.change, pointsEarned: r.points_earned,
+      });
       setStage("receipt");
       cart.clear();
       setCustomer(null);
@@ -152,21 +189,32 @@ export default function Register({ onNav }: { onNav?: (view: string) => void }) 
     return () => window.removeEventListener("keydown", h);
   });
 
-  const fnBtns: { label: string; danger?: boolean; onClick: () => void }[] = [
-    { label: "Void Last", danger: true, onClick: () => { const l = cart.lines[cart.lines.length - 1]; if (l) cart.remove(l.uid); } },
-    { label: "Cancel Sale", danger: true, onClick: () => { cart.clear(); setCustomer(null); } },
-    { label: "No Sale", onClick: () => setDrawer({ type: "no_sale", reason: "" }) },
-    { label: "Safe Drop", onClick: () => setDrawer({ type: "safe_drop", reason: "Safe drop" }) },
-    { label: "Paid In", onClick: () => setDrawer({ type: "paid_in", reason: "" }) },
-    { label: "Paid Out", onClick: () => setDrawer({ type: "paid_out", reason: "" }) },
-    { label: "Lotto Payout", onClick: () => setDrawer({ type: "paid_out", reason: "Lottery payout" }) },
-    { label: "Suspend", onClick: doSuspend },
-    { label: "Recall", onClick: openResume },
-    { label: "Refund", onClick: () => onNav?.("transactions") },
-    { label: "Last Receipt", onClick: () => { if (lastReceipt) { setReceipt(lastReceipt); setStage("receipt"); } else notify("No receipt yet"); } },
-    { label: "Recent Txns", onClick: () => onNav?.("transactions") },
-    { label: "X / Z Report", onClick: () => onNav?.("shift") },
-    { label: "Reports", onClick: () => onNav?.("reports") },
+  // Function buttons grouped by intent (Sale / Drawer / Operations / Manager).
+  // Grouping is purely visual — every command is unchanged.
+  type FnBtn = { label: string; danger?: boolean; onClick: () => void };
+  const fnGroups: { title: string; btns: FnBtn[] }[] = [
+    { title: "Sale", btns: [
+      { label: "Void Last", danger: true, onClick: () => { const l = cart.lines[cart.lines.length - 1]; if (l) cart.remove(l.uid); } },
+      { label: "Cancel Sale", danger: true, onClick: () => { cart.clear(); setCustomer(null); } },
+      { label: "Suspend", onClick: doSuspend },
+      { label: "Recall", onClick: openResume },
+      { label: "Refund", danger: true, onClick: () => onNav?.("transactions") },
+    ]},
+    { title: "Drawer", btns: [
+      { label: "No Sale", onClick: () => setDrawer({ type: "no_sale", reason: "" }) },
+      { label: "Safe Drop", onClick: () => setDrawer({ type: "safe_drop", reason: "Safe drop" }) },
+      { label: "Paid In", onClick: () => setDrawer({ type: "paid_in", reason: "" }) },
+      { label: "Paid Out", onClick: () => setDrawer({ type: "paid_out", reason: "" }) },
+      { label: "Lotto Payout", onClick: () => setDrawer({ type: "paid_out", reason: "Lottery payout" }) },
+    ]},
+    { title: "Operations", btns: [
+      { label: "Last Receipt", onClick: () => { if (lastReceipt) { setReceipt(lastReceipt); setStage("receipt"); } else notify("No receipt yet"); } },
+      { label: "Recent Txns", onClick: () => onNav?.("transactions") },
+      { label: "X / Z Report", onClick: () => onNav?.("shift") },
+    ]},
+    { title: "Manager", btns: [
+      { label: "Reports", onClick: () => onNav?.("reports") },
+    ]},
   ];
 
   return (
@@ -231,9 +279,16 @@ export default function Register({ onNav }: { onNav?: (view: string) => void }) 
         )}
 
         <div className="fn-bar">
-          <div className="fn-grid">
-            {fnBtns.map((b) => (
-              <button key={b.label} className={`fn-btn ${b.danger ? "danger" : ""}`} onClick={b.onClick}>{b.label}</button>
+          <div className="fn-groups">
+            {fnGroups.map((g) => (
+              <div key={g.title} className="fn-group" role="group" aria-label={g.title}>
+                <div className="fn-group-title">{g.title}</div>
+                <div className="fn-group-btns">
+                  {g.btns.map((b) => (
+                    <button key={b.label} className={`fn-btn ${b.danger ? "danger" : ""}`} onClick={b.onClick}>{b.label}</button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
           <div className="numpad">

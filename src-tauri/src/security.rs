@@ -27,6 +27,7 @@ pub fn verify_pin(pin: &str, hash: &str) -> bool {
 pub const MANAGER_ONLY: &[&str] = &[
     "void", "refund", "no_sale", "paid_out", "price_override",
     "shift_close_override", "product_delete", "settings", "manage_cashiers",
+    "open_drawer", "configure_devices",
 ];
 
 pub fn role_can(role: &str, action: &str) -> bool {

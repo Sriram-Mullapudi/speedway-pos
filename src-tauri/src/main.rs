@@ -7,6 +7,9 @@ mod commands;
 mod customers;
 mod db;
 mod demo;
+mod devices;
+mod hardware;
+mod purchasing;
 mod inventory;
 mod models;
 mod pricing;
@@ -75,6 +78,8 @@ fn main() {
             shifts::close_shift,
             shifts::create_cash_drawer_event,
             reports::get_report,
+            reports::get_profit_report,
+            reports::get_loss_prevention,
             settings::get_layout,
             settings::save_layout,
             customers::find_customer_by_phone,
@@ -90,7 +95,21 @@ fn main() {
             settings::get_settings,
             settings::save_settings,
             audit::list_audit_log,
-            demo::reset_demo_data
+            demo::reset_demo_data,
+            hardware::list_devices,
+            hardware::reprint_receipt,
+            hardware::print_test_receipt,
+            hardware::manual_open_drawer,
+            hardware::auto_open_drawer,
+            purchasing::list_vendors,
+            purchasing::upsert_vendor,
+            purchasing::set_vendor_active,
+            purchasing::list_purchase_orders,
+            purchasing::create_purchase_order,
+            purchasing::set_po_status,
+            purchasing::receive_purchase_order,
+            purchasing::adjust_inventory,
+            purchasing::reorder_suggestions
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
