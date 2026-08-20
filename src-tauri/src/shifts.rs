@@ -85,7 +85,9 @@ pub async fn open_shift(state: tauri::State<'_, AppState>, starting_cash: i64) -
     if existing.is_some() {
         return Err("You already have an open shift".into());
     }
-    let res = sqlx::query("INSERT INTO shifts (register_id, cashier_id, opening_float) VALUES (1, ?1, ?2)")
+    let (reg_id, reg_gid) = crate::registers::active_register_ids(&state.pool).await;
+    let res = sqlx::query("INSERT INTO shifts (register_id, register_global_id, cashier_id, opening_float) VALUES (?1, ?2, ?3, ?4)")
+        .bind(reg_id).bind(&reg_gid)
         .bind(sess.cashier_id).bind(starting_cash).execute(&state.pool).await.map_err(|e| e.to_string())?;
     let shift_id = res.last_insert_rowid();
     sqlx::query("INSERT INTO cash_drawer_events (cashier_id, shift_id, event_type, amount, reason) VALUES (?1, ?2, 'shift_open', ?3, 'Opening float')")

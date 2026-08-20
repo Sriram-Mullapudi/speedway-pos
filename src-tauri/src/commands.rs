@@ -104,8 +104,8 @@ pub async fn create_sale(
     // Resolve the open shift and its register. register_id is stamped onto the
     // sale from the shift (single-register today; groundwork for Phase 17's
     // full multi-register model).
-    let (shift_id, register_id): (i64, i64) = sqlx::query_as(
-        "SELECT id, register_id FROM shifts WHERE cashier_id = ?1 AND status = 'open' ORDER BY id DESC LIMIT 1",
+    let (shift_id, register_id, register_global_id): (i64, i64, String) = sqlx::query_as(
+        "SELECT id, register_id, register_global_id FROM shifts WHERE cashier_id = ?1 AND status = 'open' ORDER BY id DESC LIMIT 1",
     )
     .bind(cashier_id)
     .fetch_optional(&state.pool)
@@ -204,8 +204,8 @@ pub async fn create_sale(
 
     let res = sqlx::query(
         "INSERT INTO transactions \
-         (cashier_id, shift_id, register_id, type, status, subtotal, tax, total, customer_id, discount, points_delta) \
-         VALUES (?1, ?2, ?3, 'sale', 'completed', ?4, ?5, ?6, ?7, ?8, ?9)",
+         (cashier_id, shift_id, register_id, register_global_id, type, status, subtotal, tax, total, customer_id, discount, points_delta) \
+         VALUES (?1, ?2, ?3, ?10, 'sale', 'completed', ?4, ?5, ?6, ?7, ?8, ?9)",
     )
     .bind(cashier_id)
     .bind(shift_id)
@@ -216,6 +216,7 @@ pub async fn create_sale(
     .bind(payload.customer_id)
     .bind(discount)
     .bind(points_delta)
+    .bind(&register_global_id)
     .execute(&mut *tx)
     .await
     .map_err(|e| e.to_string())?;

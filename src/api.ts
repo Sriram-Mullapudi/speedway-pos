@@ -74,8 +74,8 @@ export const createCashDrawerEvent = (
 
 import type { ReportData } from "./types";
 
-export const getReport = (period: "today" | "week" | "month" | "all") =>
-  invoke<ReportData>("get_report", { period });
+export const getReport = (period: "today" | "week" | "month" | "all", registerId?: number | null) =>
+  invoke<ReportData>("get_report", { period, registerId: registerId ?? null });
 
 import type { TouchLayout } from "./types";
 
@@ -233,3 +233,52 @@ export function exportCsv(filename: string, rows: Record<string, unknown>[]) {
   a.href = url; a.download = filename; a.click();
   URL.revokeObjectURL(url);
 }
+
+// ---- Phase 15: backup / health / diagnostics ----
+export interface BackupMeta {
+  filename: string; created_at: string; app_version: string; schema_version: number;
+  source_size: number; backup_size: number; sha256: string; kind: string;
+}
+export interface ValidationResult {
+  valid: boolean; checks: [string, boolean][]; schema_version: number;
+  compatibility: string; message: string;
+}
+export interface HealthReport {
+  db_status: string; schema_version: number; db_size: number; wal_size: number;
+  integrity: string; wal_mode: string; backup_status: string;
+  last_backup: string | null; last_backup_kind: string | null;
+  auto_frequency: string; app_version: string; platform: string; sync_status: string;
+}
+
+export const systemHealth = (runIntegrity: boolean) => invoke<HealthReport>("system_health", { runIntegrity });
+export const createManualBackup = () => invoke<BackupMeta>("create_manual_backup");
+export const listBackupsCmd = () => invoke<BackupMeta[]>("list_backups_cmd");
+export const validateBackupCmd = (filename: string) => invoke<ValidationResult>("validate_backup_cmd", { filename });
+export const restoreBackupCmd = (filename: string) => invoke<string>("restore_backup_cmd", { filename });
+export const diagnosticInfo = () => invoke<string>("diagnostic_info");
+export const exportDiagnosticBundle = () => invoke<string>("export_diagnostic_bundle");
+
+/** Human-readable bytes. */
+export function fmtBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+/** Backend timestamps are unix seconds as strings. */
+export function fmtTs(s: string | null): string {
+  if (!s) return "—";
+  const n = parseInt(s, 10);
+  if (!n) return s;
+  return new Date(n * 1000).toLocaleString();
+}
+
+
+// ---- Phase 16: registers ----
+export interface Register {
+  id: number; global_id: string; name: string; active: boolean; created_at: string;
+}
+export const listRegisters = () => invoke<Register[]>("list_registers");
+export const upsertRegister = (input: { id?: number; name: string }) => invoke<number>("upsert_register", { input });
+export const setRegisterActive = (id: number, active: boolean) => invoke<void>("set_register_active", { id, active });
+export const getActiveRegister = () => invoke<Register>("get_active_register");
+export const setActiveRegister = (id: number) => invoke<void>("set_active_register", { id });

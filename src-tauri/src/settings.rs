@@ -36,6 +36,8 @@ pub const KNOWN_KEYS: &[&str] = &[
     "dev_receipt_mode", "dev_drawer_mode", "dev_drawer_card", "dev_printer_forcefail",
     "receipt_paper_width", "receipt_auto_print", "receipt_copies",
     "store_address", "store_phone", "store_tax_id",
+    "backup_auto_freq", "backup_keep_manual", "backup_keep_auto",
+    "backup_last_error", "support_email", "support_docs_url",
 ];
 
 /// Typed read with default — used by the Rust sale path so business rules
@@ -49,6 +51,11 @@ pub async fn get_setting_i64(pool: &sqlx::SqlitePool, key: &str, default: i64) -
         .flatten()
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(default)
+}
+
+pub async fn set_setting(pool: &sqlx::SqlitePool, key: &str, value: &str) -> Result<(), String> {
+    sqlx::query("INSERT INTO settings (key, value) VALUES (?1, ?2) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+        .bind(key).bind(value).execute(pool).await.map(|_| ()).map_err(|e| e.to_string())
 }
 
 pub async fn get_setting_str(pool: &sqlx::SqlitePool, key: &str, default: &str) -> String {

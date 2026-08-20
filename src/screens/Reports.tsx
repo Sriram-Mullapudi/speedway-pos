@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { getReport, getProfitReport, getLossPrevention, exportCsv, money } from "../api";
+import { getReport, getProfitReport, getLossPrevention, exportCsv, listRegisters, money } from "../api";
+import type { Register } from "../api";
 import type { ReportData, ProfitReport, LossPreventionRow } from "../types";
 
 type Period = "today" | "week" | "month" | "all";
@@ -18,8 +19,11 @@ export default function Reports() {
   const [view, setView] = useState<ReportView>("sales");
   const [period, setPeriod] = useState<Period>("today");
   const [data, setData] = useState<ReportData | null>(null);
+  const [registers, setRegisters] = useState<Register[]>([]);
+  const [regFilter, setRegFilter] = useState<number | null>(null);
 
-  useEffect(() => { getReport(period).then(setData).catch(console.error); }, [period]);
+  useEffect(() => { listRegisters().then(setRegisters).catch(() => {}); }, []);
+  useEffect(() => { getReport(period, regFilter).then(setData).catch(console.error); }, [period, regFilter]);
 
   return (
     <div className="page">
@@ -31,6 +35,16 @@ export default function Reports() {
           ))}
         </div>
       </div>
+      {view === "sales" && registers.length > 1 && (
+        <div style={{ marginBottom: 12 }}>
+          <label className="field" style={{ maxWidth: 260 }}>Register
+            <select value={regFilter ?? ""} onChange={(e) => setRegFilter(e.target.value ? parseInt(e.target.value) : null)}>
+              <option value="">All registers</option>
+              {registers.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+            </select>
+          </label>
+        </div>
+      )}
       <div className="tender-tabs" style={{ marginBottom: 16 }}>
         <button className={view === "sales" ? "on" : ""} onClick={() => setView("sales")}>Sales</button>
         <button className={view === "profit" ? "on" : ""} onClick={() => setView("profit")}>Profit &amp; Margin</button>

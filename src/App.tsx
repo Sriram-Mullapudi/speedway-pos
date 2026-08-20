@@ -12,6 +12,10 @@ import Settings from "./screens/Settings";
 import AuditLog from "./screens/AuditLog";
 import Devices from "./screens/Devices";
 import Purchasing from "./screens/Purchasing";
+import SystemHealth from "./screens/SystemHealth";
+import BackupRecovery from "./screens/BackupRecovery";
+import HelpSupport from "./screens/HelpSupport";
+import Registers from "./screens/Registers";
 import { Toasts, notify } from "./components/Toast";
 import SelfCheckout from "./screens/SelfCheckout";
 import { applyTheme } from "./theme";
@@ -20,7 +24,7 @@ import LockScreen from "./screens/LockScreen";
 import { DrawerModal, OpenShiftModal } from "./components/ShiftModals";
 import { useSession } from "./sessionStore";
 
-type View = "register" | "catalog" | "inventory" | "shift" | "reports" | "transactions" | "customers" | "touchscreen" | "cashiers" | "settings" | "audit" | "devices" | "purchasing";
+type View = "register" | "catalog" | "inventory" | "shift" | "reports" | "transactions" | "customers" | "touchscreen" | "cashiers" | "settings" | "audit" | "devices" | "purchasing" | "health" | "backup" | "help" | "registers";
 
 export default function App() {
   const { session, activeShift, ready, refresh, logout, isManager } = useSession();
@@ -49,7 +53,7 @@ export default function App() {
     { id: "reports", label: "Reports" },
     { id: "transactions", label: "Transactions" },
     { id: "customers", label: "Customers" },
-    ...(isManager() ? [{ id: "touchscreen" as View, label: "Touchscreen" }, { id: "cashiers" as View, label: "Cashiers" }, { id: "audit" as View, label: "Audit" }, { id: "purchasing" as View, label: "Purchasing" }, { id: "devices" as View, label: "Devices" }, { id: "settings" as View, label: "Settings" }] : []),
+    ...(isManager() ? [{ id: "touchscreen" as View, label: "Touchscreen" }, { id: "cashiers" as View, label: "Cashiers" }, { id: "audit" as View, label: "Audit" }, { id: "purchasing" as View, label: "Purchasing" }, { id: "registers" as View, label: "Registers" }, { id: "devices" as View, label: "Devices" }, { id: "health" as View, label: "System Health" }, { id: "backup" as View, label: "Backup" }, { id: "help" as View, label: "Help" }, { id: "settings" as View, label: "Settings" }] : []),
   ];
 
   return (
@@ -90,6 +94,10 @@ export default function App() {
         {view === "audit" && <AuditLog />}
         {view === "devices" && <Devices />}
         {view === "purchasing" && <Purchasing />}
+        {view === "health" && <SystemHealth />}
+        {view === "backup" && <BackupRecovery />}
+        {view === "help" && <HelpSupport />}
+        {view === "registers" && <Registers />}
         {view === "cashiers" && <Cashiers />}
       </main>
 

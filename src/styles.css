@@ -690,3 +690,30 @@ button:disabled { opacity: 0.55; cursor: not-allowed; }
 .cd-change span:last-child { color: var(--accent); font-family: var(--mono); }
 .cd-points { color: var(--accent); font-size: 1.8vw; }
 .cd-thanks { color: var(--muted); font-size: 1.8vw; margin-top: 2vh; }
+
+/* ===== Phase 15: backup / health / help ===== */
+.restore-warn { background: color-mix(in srgb, var(--danger) 10%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--border));
+  border-radius: var(--r-md); padding: var(--sp-3); margin-bottom: var(--sp-3); line-height: 1.5; }
+.danger-btn { background: var(--danger); color: #fff; border: none; }
+.danger-btn:hover { background: color-mix(in srgb, var(--danger) 85%, #000); }
+.busy { opacity: .6; pointer-events: none; }
+
+.health-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--sp-4); }
+.health-card { background: var(--panel); border: 1px solid var(--border); border-radius: var(--r-lg);
+  padding: var(--sp-4); box-shadow: var(--elev-1); }
+.hc-title { font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .06em;
+  color: var(--muted); font-weight: 700; margin-bottom: var(--sp-3); }
+.hc-row { display: flex; justify-content: space-between; align-items: center; padding: var(--sp-2) 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--border) 50%, transparent); }
+.hc-row:last-child { border-bottom: none; }
+.hc-row > span:first-child { color: var(--muted); font-size: var(--fs-sm); }
+
+.diag-box { background: var(--panel-2); border: 1px solid var(--border); border-radius: var(--r-md);
+  padding: var(--sp-3); margin-top: var(--sp-3); font-family: var(--mono); font-size: var(--fs-sm);
+  white-space: pre-wrap; max-height: 320px; overflow-y: auto; }
+.help-list { margin: 0; padding-left: var(--sp-5); color: var(--text); line-height: 1.7; }
+.help-list li { margin-bottom: var(--sp-1); }
+.pill.good { background: color-mix(in srgb, var(--success) 18%, transparent); color: var(--success); }
+.pill.low { background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
+.pill.ok { background: color-mix(in srgb, var(--info) 16%, transparent); color: var(--info); }

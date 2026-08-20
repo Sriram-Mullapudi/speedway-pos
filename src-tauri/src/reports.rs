@@ -31,19 +31,31 @@ fn period_clause(period: &str) -> &'static str {
     }
 }
 
+/// Optional register filter. Empty string = all registers (backward-compatible
+/// default). Given a register id, restricts to that terminal's rows. The id is
+/// validated to be a plain integer before interpolation, so it is injection-safe.
+fn register_clause(register_id: Option<i64>) -> String {
+    match register_id {
+        Some(id) => format!("AND t.register_id = {}", id),
+        None => String::new(),
+    }
+}
+
 #[tauri::command]
 pub async fn get_report(
     state: tauri::State<'_, AppState>,
     period: String,
+    register_id: Option<i64>,
 ) -> Result<ReportData, String> {
     let clause = period_clause(&period);
+    let reg = register_clause(register_id);
     let pool = &state.pool;
 
     // Totals
     let (gross, tax, txn_count): (i64, i64, i64) = sqlx::query_as(&format!(
         "SELECT COALESCE(SUM(total),0), COALESCE(SUM(tax),0), COUNT(*) \
          FROM transactions t \
-         WHERE t.type = 'sale' AND t.status = 'completed' {clause}"
+         WHERE t.type = 'sale' AND t.status = 'completed' {clause} {reg}"
     ))
     .fetch_one(pool)
     .await
@@ -53,7 +65,7 @@ pub async fn get_report(
     let by_payment = sqlx::query_as::<_, (String, i64)>(&format!(
         "SELECT p.kind, COALESCE(SUM(p.amount),0) \
          FROM payments p JOIN transactions t ON t.id = p.transaction_id \
-         WHERE t.type = 'sale' AND t.status = 'completed' {clause} \
+         WHERE t.type = 'sale' AND t.status = 'completed' {clause} {reg} \
          GROUP BY p.kind ORDER BY 2 DESC"
     ))
     .fetch_all(pool)
@@ -70,7 +82,7 @@ pub async fn get_report(
          JOIN transactions t ON t.id = ti.transaction_id \
          LEFT JOIN products pr ON pr.id = ti.product_id \
          LEFT JOIN categories c ON c.id = pr.category_id \
-         WHERE t.type = 'sale' AND t.status = 'completed' {clause} \
+         WHERE t.type = 'sale' AND t.status = 'completed' {clause} {reg} \
          GROUP BY c.name ORDER BY 2 DESC"
     ))
     .fetch_all(pool)
@@ -86,7 +98,7 @@ pub async fn get_report(
          FROM transaction_items ti \
          JOIN transactions t ON t.id = ti.transaction_id \
          JOIN products pr ON pr.id = ti.product_id \
-         WHERE t.type = 'sale' AND t.status = 'completed' {clause} \
+         WHERE t.type = 'sale' AND t.status = 'completed' {clause} {reg} \
          GROUP BY pr.id ORDER BY SUM(ti.qty) DESC LIMIT 10"
     ))
     .fetch_all(pool)
@@ -176,7 +188,7 @@ pub async fn get_profit_report(
     })
 }
 
-#[derive(serde::Serialize, sqlx::FromRow)]
+#[derive(serde::Serialize)]
 pub struct LossPreventionRow {
     pub cashier: String,
     pub void_count: i64,
