@@ -188,7 +188,7 @@ pub async fn get_profit_report(
     })
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, sqlx::FromRow)]
 pub struct LossPreventionRow {
     pub cashier: String,
     pub void_count: i64,
@@ -223,3 +223,4 @@ pub async fn get_loss_prevention(
     ))
     .fetch_all(pool).await.map_err(|e| e.to_string())
 }
+

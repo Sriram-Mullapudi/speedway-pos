@@ -11,7 +11,7 @@
 //!   controlled restart, not a fake hot restore.
 //! * We never delete pos.db before a valid safety backup exists.
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use sqlx::{Row, SqlitePool};
 use std::fs;
@@ -19,7 +19,7 @@ use std::path::{Path, PathBuf};
 
 pub const CURRENT_SCHEMA_VERSION: i64 = 9; // migrations 0001..0009
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct BackupMeta {
     pub filename: String,
     pub created_at: String,
@@ -322,3 +322,4 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
     }
 }
+
